@@ -11,6 +11,10 @@ repo_url = 'https://api.github.com/repos/jagadeeshnv/dell_ansi_utils'
 tag_url = f"{repo_url}/commits"
 branch_name = 'ansibod_rst_gen'
 
+urllib3.disable_warnings()
+headers = {'Authorization': 'bearer {}'.format(gitpat),
+        'Accept': 'application/vnd.github+json'}
+
 def get_files_from_commit(commit):
     files = []
     print(commit.get('commit').get('message'))
@@ -22,7 +26,6 @@ def get_files_from_commit(commit):
         # print(f.get('filename'))
         files.append(f.get('filename'))
     return files
-
 
 def download_the_files(modules, branch_name):
     tmp_dir = tempfile.mkdtemp()
@@ -76,18 +79,12 @@ def create_commit(tree_sha, last_commit_sha):
     payload = {
         "message": "Second attempt to commit",
         "tree": tree_sha,
-        "parent": [last_commit_sha]
+        "parents": [last_commit_sha]
     }
     commit_resp = requests.post(f"{repo_url}/git/commits", json=payload, headers=headers, verify=False)
     pprint(commit_resp.json())
     commit_sha = commit_resp.json()['sha']
     return commit_sha
-
-
-urllib3.disable_warnings()
-headers = {'Authorization': 'bearer {}'.format(gitpat),
-        'Accept': 'application/vnd.github+json'}
-
 
 response = requests.get(tag_url, params={'sha': branch_name} ,headers=headers, verify=False)
 content_data = response.json()
