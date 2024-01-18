@@ -1,4 +1,5 @@
 import base64
+import sys
 import tempfile
 import os
 import requests
@@ -8,7 +9,7 @@ import subprocess
 from pprint import pprint
 
 repo_url = 'https://api.github.com/repos/jagadeeshnv/dell_ansi_utils'
-tag_url = f"{repo_url}/commits"
+commits_url = f"{repo_url}/commits"
 branch_name = 'ansibod_rst_gen'
 
 urllib3.disable_warnings()
@@ -30,8 +31,9 @@ def get_files_from_commit(commit):
 def download_the_files(modules, branch_name):
     tmp_dir = tempfile.mkdtemp()
     print(tmp_dir)
-    temp_docs_dir = f"{tmp_dir}/docs"
-    os.mkdir(temp_docs_dir)
+    temp_docs_dir = f"{tmp_dir}/docs/modules"
+    # os.mkdir(temp_docs_dir)
+    os.makedirs(temp_docs_dir)
     rst_dict = {}
     for mod in modules:
         mod_url = f"{repo_url}/contents/{mod}"
@@ -43,7 +45,7 @@ def download_the_files(modules, branch_name):
             f.write(decoded_data)
         result = subprocess.run(["ansible-doc-extractor", temp_docs_dir, fpath], capture_output=True, text=True)
         print(result.stdout)
-        rst_dict[mod] = f"docs/{(mod.split('/')[-1]).rstrip('.py')}.rst"
+        rst_dict[mod] = f"docs/modules/{os.path.splitext(os.path.basename(mod))[0]}.rst"
     files = os.listdir(temp_docs_dir)
     full_paths = []
     for file in files:
@@ -75,25 +77,37 @@ def create_tree(blob_sha_dict, last_commit_sha):
     tree_sha = tree_resp.json()['sha']
     return tree_sha
 
-def create_commit(tree_sha, last_commit_sha):
+def create_commit(tree_sha, last_commit_sha, modified_modules):
     payload = {
-        "message": "Second attempt to commit",
+        "message": f"Committing rst for {(','.join(modified_modules))}",
         "tree": tree_sha,
         "parents": [last_commit_sha]
+        #  signing a commit needs to tried
     }
+
     commit_resp = requests.post(f"{repo_url}/git/commits", json=payload, headers=headers, verify=False)
     pprint(commit_resp.json())
     commit_sha = commit_resp.json()['sha']
     return commit_sha
 
-response = requests.get(tag_url, params={'sha': branch_name} ,headers=headers, verify=False)
-content_data = response.json()
-files = get_files_from_commit(content_data[0])
-pprint(files)
+response = requests.get(commits_url, params={'sha': branch_name, "path": "plugins/modules/"}, headers=headers, verify=False)
+commits_data = response.json()
+# here all commits with the modifications are chosen, can be limited to few commits accordingly
+all_modified = []
+for c in commits_data:
+    files = get_files_from_commit(c)
+    all_modified.extend(files)
+pprint(all_modified)
+if not all_modified:
+    sys.exit(0)
+
 modified_modules = []
-for f in files:
-    if f.startswith('plugins/modules/') and f.endswith('.py'):
+for f in set(all_modified):
+    if (f.startswith('plugins/modules/idrac_') or f.startswith('plugins/modules/dellemc_') or f.startswith('plugins/modules/ome_')):
         modified_modules.append(f)
+if not modified_modules:
+    sys.exit(0)
+
 
 rst_full_paths_dict, tmp_dir = download_the_files(modified_modules, branch_name)
 print(rst_full_paths_dict)
@@ -108,7 +122,7 @@ pprint(blob_dict)
 tree_sha = create_tree(blob_dict, last_commit_sha)
 print(tree_sha)
 
-new_commit_sha = create_commit(tree_sha, last_commit_sha)
+new_commit_sha = create_commit(tree_sha, last_commit_sha, modified_modules)
 print(new_commit_sha)
 
 # update_commit = f"{repo_url}/git/commits/{new_commit_sha}"
@@ -119,7 +133,7 @@ print(new_commit_sha)
 
 update_ref_payload = {
     "sha": new_commit_sha,
-    "force": True
+    "force": False
 }
 response = requests.patch(f"{repo_url}/git/refs/heads/{branch_name}", json=update_ref_payload, headers=headers, verify=False)
 print(response.json())
