@@ -26,6 +26,7 @@ deprecated:
   removed_from_collection: dellemc.openmanage
 description:
     - This module allows to configure the iDRAC services related attributes.
+    - test rst 2
 options:
     idrac_ip:
         required: true

@@ -26,6 +26,7 @@ deprecated:
   removed_from_collection: dellemc.openmanage
 description:
     - This module allows to configure the iDRAC eventing related attributes.
+    - test_rst 1
 extends_documentation_fragment:
   - dellemc.openmanage.idrac_auth_options
 options:
